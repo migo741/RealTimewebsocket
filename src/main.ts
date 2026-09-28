@@ -2,9 +2,10 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 
 import Preview from './components/DataTablePreview.vue'
+import App from './App.vue'
 import router from './router'
 
-const app = createApp(Preview)
+const app = createApp(App)
 
 app.use(createPinia())
 app.use(router)

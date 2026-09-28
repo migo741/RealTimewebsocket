@@ -90,7 +90,7 @@
 <script setup lang="ts">
 import type { ConversationSummary, sessionMessage } from './content'
 import { mockConversations, mockSessionMessages } from './content'
-import { ref, computed } from 'vue'
+import { ref, computed, watchEffect } from 'vue'
 
 const currentConversationId = ref<ConversationSummary['conversationId'] | null>(null)
 const sendMessage = ref<string>('')
@@ -111,6 +111,7 @@ const currentConversation = computed<sessionMessage[]>(() => {
 })
 
 const handleSendMessage = () => {
+  let timerId: ReturnType<typeof setInterval> | null = null
   if (!sendMessage.value || !currentConversationId.value || sendMessage.value.trim() === '') return
   const res: sessionMessage = {
     messageId: mockSessionMessagesRef.value.length + 1,
@@ -129,26 +130,42 @@ const handleSendMessage = () => {
     createdAt: new Date().toISOString(), //TODO: 时间戳
     sender: 'assistant',
   }
-  let timerId = setInterval(() => {
+  if (timerId !== null) {
+    clearInterval(timerId)
+    timerId = null
+  }
+  timerId = setInterval(() => {
     if (i === str.length) {
+      if (timerId) {
+        clearInterval(timerId)
+      }
       return
     }
-    const AIMsg = mockSessionMessagesRef.value.find((msg) => msg.messageId === AIID)
-    AIMsg.content += str[i]
+    if (AIMsg) {
+      AIMsg.content += str[i]
+      if (currentAIMsg) {
+        const latestMessage = mockSessionMessagesRef.value
+          .filter((message) => message.conversationId === AIMsg.conversationId)
+          .at(-1)
+
+        if (latestMessage?.messageId === AIMsg.messageId) {
+          currentAIMsg.lastMessage += str[i]
+        }
+      }
+    }
     i++
   }, 500)
 
   mockSessionMessagesRef.value.push(res)
   mockSessionMessagesRef.value.push(mockAssistantMessage)
-
-  const conversation = mockConversationsRef.value.find(
-    (conversation: ConversationSummary) =>
-      conversation.conversationId === currentConversationId.value,
+  const AIMsg = mockSessionMessagesRef.value.filter((msg) => msg.sender === 'assistant').at(-1)
+  const currentAIMsg = mockConversationsRef.value.find(
+    (msg) => msg.conversationId === AIMsg?.conversationId,
   )
-  if (conversation) {
-    conversation.updatedAt = res.createdAt
-    conversation.lastMessage = currentConversation.value.at(-1)?.content || ''
+  if (currentAIMsg) {
+    currentAIMsg.lastMessage = ''
   }
+
   sendMessage.value = ''
 }
 </script>

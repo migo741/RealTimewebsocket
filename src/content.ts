@@ -53,6 +53,27 @@ const mockSessionMessages: sessionMessage[] = [
     createdAt: '2026-09-22T10:31:00Z',
     sender: 'customer',
   },
+  {
+    messageId: 3,
+    conversationId: 1,
+    content: '什么时候见面',
+    createdAt: '2026-09-22T10:32:00Z',
+    sender: 'customer',
+  },
+  {
+    messageId: 4,
+    conversationId: 2,
+    content: '你好',
+    createdAt: '2026-09-22T10:31:00Z',
+    sender: 'customer',
+  },
+  {
+    messageId: 5,
+    conversationId: 3,
+    content: '问题已经解决了，谢谢',
+    createdAt: '2026-09-22T10:31:00Z',
+    sender: 'customer',
+  },
 ]
 
 export type { ConversationSummary, sessionMessage }

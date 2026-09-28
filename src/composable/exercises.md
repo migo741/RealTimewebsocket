@@ -18,6 +18,47 @@ interface QuantityOptions {
 
 export function useQuantity(options: QuantityOptions) {
   // TODO：设计状态、公开操作和返回值类型。
+  const { initial,min,max,step = 1 } = options
+  const count = ref(initial)
+  const curCount = computed(() => {
+    return count.value
+  })
+  const canIncrease = computed(() => {
+    return count.value < max
+  })
+  const canDecrease = computed(() => {
+    return count.value > min
+  })
+  const increase = () => {
+    count.value = Math.min(count.value+step,max)
+  }
+  const decrease = () => {
+    count.value = Math.max(count.value-step,min)
+  }
+  const isDirty = computed(() => {
+    return count.value !== initial
+  })
+  const setCount = (val:number) => {
+    if(!Number.isFinite(val)){
+      return
+    }
+    count.value = Math.min(Math.max(min,Math.trunc(val)),max)
+  }
+  const reset = () => {
+    count.value = initial
+  }
+
+
+  return {
+    curCount,
+    canIncrease,
+    canDecrease,
+    isDirty,
+    increase,
+    decrease,
+    setCount,
+    reset
+  }
 }
 ```
 

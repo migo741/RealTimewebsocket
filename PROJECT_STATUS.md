@@ -21,6 +21,7 @@
 - 用户提交实现后，先做 Code Review，再决定下一步。
 - 实时通信按业务需要逐步引入；前期不封装万能 `useSSE`、`useWebSocket` 或复杂架构。
 - 完整规则以 `.agents/.skills/skill.md` 为准，必须完整阅读该文件。
+- `src/composable/` 中的练习是用户独立进行的 Vue 基本功训练，不属于 AI 客服工作台；不根据它决定工作台的下一步。
 
 ## 当前技术与环境
 
@@ -44,54 +45,57 @@
 - 工作台立场已经确定：这是管理员使用的客服后台。AI 与管理员同一侧，回复对象是当前会话里的客户。AI 消息的 `sender` 是 `assistant`。
 - 底部可以发送消息。未选中会话，或去掉首尾空白后没有文字时，不会发送。发送内容会去掉首尾空白。
 - 会话列表和消息列表都放在 `ref` 中。发送后会追加一条自己的消息，并再追加一条 `content` 初始为空的 `assistant` 消息。
-- 已有一个 `setInterval`，按 `messageId` 找到这条 AI 消息，每 500ms 给 `content` 追加一个字。
+- 本地 AI 逐字回复的业务行为已经验证：每次发送拥有独立定时器，每 500ms 给本次 AI 消息的 `content` 追加一个字，完整输出后清除定时器。
+- AI 消息加入响应式数组后取得其对象引用；切换选中会话后，定时器仍更新原消息及所属会话的摘要。
+- 每次追加文字时，按这条 AI 消息的 `conversationId` 取得该会话最后一条消息；只有 `messageId` 相同的回复可以更新摘要。较早回复仍继续更新自己的气泡。
+- 同一会话连续发送两次、不同会话各自发送，回复都能分别完成，消息 ID 没有重复，未读数不变。
+- `src/main.ts` 已恢复以工作台 `App` 为根组件。
 - 右侧客户信息仍是占位文案。没有 Pinia 业务状态、业务路由、后端、SSE 或 WebSocket。
-- 本次没有把「AI 回复逐段输出」记为完成。见下方当前任务。
+- 上述行为使用当前业务脚本和受控定时器验证，未进行浏览器自动化测试。本次类型检查和生产构建通过，格式检查仍有待整理项。
 
 ## 当前工作区状态
 
 - 业务代码主要在 `src/App.vue` 和 `src/content.ts`。`src/router/index.ts` 仍无业务路由。`src/stores/counter.ts` 仍是脚手架示例。
-- 2026-09-22 本次核对时，`pnpm.cmd exec prettier --check src/ package.json` 未通过：`src/content.ts` 格式不符合 Prettier。
-- 同一次 `pnpm.cmd build` 未通过。Vite 生产打包本身成功，`vue-tsc` 失败：`src/App.vue` 第 137 行，`AIMsg` 可能为 `undefined`。
-- 会话开始时 Git 工作区有未提交改动：已修改 `package.json`、`pnpm-lock.yaml`、`src/App.vue`，未跟踪 `PROJECT_STATUS.md`。之后又加入了 `src/content.ts`，`App.vue` 继续有修改。本次更新文档时没能重新跑成 `git status`，推送前需要再看一次实际暂存状态。
+- 2026-09-28 用户准备推送前，已再次核对源码并运行 `pnpm.cmd build`，通过 `vue-tsc` 类型检查和 Vite 生产打包。业务逻辑与上一轮已通过受控定时器验收的版本一致。
+- 同次运行 `pnpm.cmd exec prettier --check src/App.vue src/main.ts src/content.ts`，仍未通过：`src/App.vue` 和 `src/content.ts` 需要整理格式，`src/main.ts` 通过。
+- 当前分支为 `master`；本次核对时最近提交为 `bae42e7`（`composable`）。
+- 本次待提交文件包括 `PROJECT_STATUS.md`、`src/App.vue`、`src/content.ts`、`src/main.ts`，以及独立练习文件 `src/composable/exercises.md`。用户已将这五个文件暂存；随后本交接文档又有更新，提交前需重新暂存更新后的文档。后续恢复以实际 Git 状态为准。
+- `server/` 目录尚未创建，`package.json` 尚无 `dev:server` 脚本；服务端接口仍为下一步任务，未记为完成。
+- 会话的 `updatedAt` 目前仍来自 mock 初始数据，发送后的时间同步尚未实现。会话 mock 与历史消息完整性暂按学习阶段约定处理，尚未引入接口加载状态。
 
 ## 当前唯一任务（暂停后从这里恢复）
 
-把已经开始的 AI 回复逐段输出做完。
+建立最小 Node.js mock 服务，提供一个会话列表 HTTP 接口。
 
 任务边界：
 
-- 回复气泡先进入当前会话，文字再逐字变长，直到本地那句固定回复显示完。
-- 只修改这条 `assistant` 消息的 `content`，不要每来一个字就再 `push` 一条消息。
-- 每次 `content` 变长后，把同一份文字写进该会话的 `lastMessage`。现在第 150 行只在发送当下降赋值一次，当时内容还是空字符串，所以左侧卡片不会跟着变长。
-- 文字输出完后停止定时器。现在 `i === str.length` 时只是 `return`，`timerId` 没有用于 `clearInterval`。
-- 找到消息后再改 `content`，先处理 `AIMsg` 可能为 `undefined`，让 `pnpm.cmd build` 通过。
-- 输出过程中切换会话，增长仍发生在原来那条消息上。
-- 暂时不要请求后端，不要做停止按钮、Pinia 或组件拆分。
+- 使用 Node.js 内置 `node:http`，服务端使用 ESM JavaScript；当前 Node `v22.20.0` 已可运行，不需要增加框架依赖。
+- 新建 `server/index.mjs` 作为服务入口，`server/mock-data.mjs` 存放会话列表 mock；数据与请求处理分开。
+- 服务监听 `127.0.0.1:3000`，提供 `GET /api/conversations`，成功返回 `200` 和 JSON 数组。
+- 数组项包含当前 `ConversationSummary` 的五个字段：`conversationId`、`customerName`、`lastMessage`、`updatedAt`、`unreadCount`。
+- JSON 响应使用 `Content-Type: application/json; charset=utf-8`；未支持的请求返回 JSON 格式的 `404`，不悬挂请求。
+- 在 `package.json` 增加 `dev:server` 脚本，使用 `node server/index.mjs` 启动。
+- 本轮交付独立运行的会话列表接口，使用浏览器或 HTTP 客户端验收。前端接口接入、消息接口和服务端流式回复尚未布置或实现。
 - 由用户亲自实现；除非用户明确说「给我答案」，否则不要直接给完整代码。
 
 ## 当前任务的学习重点
 
-- 在事件函数里读取 `computed`，拿到的是当时的字符串。`lastMessage = currentConversation.value.at(-1)?.content` 不会在之后跟着消息内容变长。
-- 气泡能变长，是因为模板直接渲染消息的 `content`。卡片渲染的是另一份 `lastMessage`。
-- 定时器在工作结束后要停掉。
+- 区分服务端业务数据与前端选中状态、展示状态的职责。
+- 理解 HTTP 请求的方法、路径，以及响应的状态码、响应头和 JSON 文本。
+- 建立可独立启动的服务端进程，保持后端只承担辅助前端学习的职责。
 
 ## 当前任务完成标准
 
-- 在张三的会话里发送内容后，右侧先出现自己的消息，再出现 AI 气泡，文字逐字变长并停在整句。
-- 张三卡片上的最后一条消息与 AI 气泡同步变长，未读数不变。
-- 输出过程中切到李四，李四的会话里没有这段文字；回到张三能看到已经输出的内容，并继续直到整句。
-- 连续发送两次，两段回复各自变长，不会写到同一条消息上。
-- 文字结束后定时器停止。
-- `src/content.ts` 的 Prettier 检查通过，`pnpm.cmd build` 可以通过。
+- `pnpm.cmd dev:server` 能独立启动服务，即使 Vite 未启动也能请求接口。
+- 请求 `http://127.0.0.1:3000/api/conversations` 返回当前三位客户的 JSON 数组，字段完整，中文正常显示。
+- 请求一个不存在的地址，得到 `404` 和 JSON 错误内容。
+- 修改服务端会话 mock 并重启服务后，请求可以取得修改后的数据。
 
 ## 下一次 Review 需要关注
 
-- `lastMessage` 是否在每次追加文字后更新，而不是只在发送时抄一次空字符串。
-- `setInterval` 是否在输出完成后清除。
-- `find` 的结果是否先判断存在再改 `content`。
-- 连续发送时，每条 AI 消息是否只用自己的 `messageId` 更新。
-- 切会话后，增长是否仍落在发起发送的那一场会话上。
+- 服务端入口与数据是否分开，响应是否覆盖已支持和未支持的请求。
+- 接口是否保持当前会话摘要字段契约，并正确发送 JSON 状态码、响应头和响应体。
+- 服务是否可独立启动；不把尚未进行的前端接入记为完成。
 
 ## 状态更新时间
 
@@ -102,3 +106,5 @@
 - 2026-09-22：按用户要求暂停业务任务，安装 Sass 并将 `App.vue` 的平铺 CSS 重构为 scoped SCSS；格式与构建检查通过；恢复时继续会话选择状态任务。
 - 2026-09-22：用户触发「更新状态」；已重新核对源码、依赖和 Git 工作区，并再次通过 Prettier、类型检查及生产构建；暂停点保持为会话选择状态任务。
 - 2026-09-22：用户准备推远程，再次触发「更新状态」。源码已推进到会话选择、本地消息发送和未完成的 AI 逐字回复。Prettier 与 `pnpm.cmd build` 未通过，暂停点改为完成这条逐字回复。
+- 2026-09-28：本地逐字回复的业务行为和构建通过；已用受控定时器验证会话切换、同会话与跨会话并行回复、摘要更新资格、定时器结束、消息 ID 和发送校验。格式检查仍未通过。用户提出引入服务端分离数据职责，当前任务推进为最小会话列表 HTTP 接口；明确 Composable 练习不属于工作台。
+- 2026-09-28：用户准备推送代码，要求再次更新状态。已 Review 当前源码并核对分支、提交和暂存区，重新确认构建通过、两处业务文件格式检查未通过。当前唯一任务保持为最小会话列表 HTTP 接口；服务端尚未创建。
